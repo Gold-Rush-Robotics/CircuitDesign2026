@@ -19,7 +19,7 @@
 #define D1 40
 #define D2 42
 #define D3 44
-#define WATER_SENSOR A0 
+#define WATER_SENSOR A0
 LiquidCrystal lcd(RS, E, D0, D1, D2, D3);
 Adafruit_INA219 ina219;
 
@@ -27,33 +27,34 @@ void writeToDisplay(char *text);
 
 volatile unsigned long pulseCount = 0;
 unsigned long prevMillis = 0;
-const int interval = 500; // Calculate RPM every 500ms
+const int SCREEN_UPDATE_INTERVAL = 500;
+const int RPM_UPDATE_INTERVAL = 500;
 
-void RPMInterrupt() {
-    // Simple debounce: ignore pulses within 10ms of each other
+void RPMInterrupt()
+{
     static unsigned long lastInterruptTime = 0;
     unsigned long interruptTime = millis();
-    if (interruptTime - lastInterruptTime > 2) {
+    if (interruptTime - lastInterruptTime > 2)
+    {
         pulseCount++;
     }
     lastInterruptTime = interruptTime;
 }
 
-float getRPM() {
+float getRPM()
+{
     noInterrupts();
     unsigned long pulses = pulseCount;
-    pulseCount = 0; 
+    pulseCount = 0;
     interrupts();
 
-    float ppr = 20.0; // Updated to your specific motor
-    // Formula: (Pulses / PPR) * (60,000ms / Interval_ms)
-    float rpm = (pulses / ppr) * (60000.0 / interval);
+    float ppr = 20.0;
+    float rpm = (pulses / ppr) * (60000.0 / RPM_UPDATE_INTERVAL);
     return rpm;
 }
 
 void setup()
 {
-    // initialize LED digital pin as an output.
     Serial.begin(9600);
     pinMode(GREEN_PIN, OUTPUT);
     pinMode(YELLOW_PIN, OUTPUT);
@@ -69,9 +70,12 @@ void setup()
 int currentTick = 0;
 
 bool started = false;
+bool isRamping = false;
+
 float currentRPM = getRPM();
 unsigned long currentMillis;
 int seconds;
+unsigned long rampStartTime = 0;
 void loop()
 {    
     
@@ -92,30 +96,73 @@ void loop()
         seconds = 0;
         delay(50);
     } else {
+    currentMillis = millis();
+    seconds = currentMillis / 1000;
 
-        currentMillis = millis();
-        seconds = currentMillis / 1000;
-        
-        // Countdown logic
-        if (seconds <= 3) {
-            lcd.clear();
-            lcd.setCursor(0, 1);
-            lcd.print(3 - seconds);
-            digitalWrite(MOTOR_PWR, LOW);
-            switch(seconds){
-                case 3:
-                    digitalWrite(RED_PIN, HIGH);
-                break;
-                case 2:
-                    digitalWrite(YELLOW_PIN, HIGH);
-                break;
-                case 1:
-                    digitalWrite(GREEN_PIN, HIGH);
-                break;
-            }
-        } else {
-            started = true;
+    if (seconds < 3)
+    {
+        lcd.setCursor(0, 1);
+        lcd.print(3 - seconds);
+        digitalWrite(MOTOR_PWR, LOW);
+        switch (seconds)
+        {
+        case 3:
+            digitalWrite(RED_PIN, HIGH);
+            break;
+        case 2:
+            digitalWrite(YELLOW_PIN, HIGH);
+            break;
+        case 1:
+            digitalWrite(GREEN_PIN, HIGH);
+            break;
+        }
+    }
+    else
+    {
+        started = true;
+    }
+
+    if (started)
+    {
+        if (isRamping)
+        {
+            if (rampStartTime == 0)
+                rampStartTime = millis();
+            unsigned long elapsed = millis() - rampStartTime;
+
+            int target = map(elapsed, 0, 2000, 100, 255);
+            target = constrain(target, 0, 255);
+
+            analogWrite(MOTOR_PWR, target);
+        }
+
+        if (seconds < 5)
+        {
+            isRamping = true;
+            digitalWrite(YELLOW_PIN, HIGH);
+            digitalWrite(RED_PIN, LOW);
+            digitalWrite(GREEN_PIN, LOW);
+
+            int remainingMS = millis() - 3000;
+
+            int msPerTick = 2000 / 255;
+
+        }
+        else
+        {
             digitalWrite(MOTOR_PWR, HIGH);
+            isRamping = false;
+            digitalWrite(YELLOW_PIN, LOW);
+            if (currentRPM > 90)
+            {
+                digitalWrite(GREEN_PIN, HIGH);
+                digitalWrite(YELLOW_PIN, LOW);
+                digitalWrite(RED_PIN, LOW);
+            }
+            else
+            {
+                digitalWrite(MOTOR_PWR, HIGH);
+            }
         }
         
         // Only calculate RPM every 500ms
@@ -148,5 +195,21 @@ void loop()
             lcd.print((float)ina219.getCurrent_mA());
         }
     }
-}
 
+    if (started && (currentMillis - prevMillis >= SCREEN_UPDATE_INTERVAL))
+    {
+
+        lcd.setCursor(0, 0);
+        lcd.print("RPM: ");
+        if (isRamping)
+        {
+            lcd.clear();
+            lcd.print("RAMPING");
+        }
+        else
+        {
+            lcd.clear();
+            lcd.print((int)currentRPM);
+        }
+    }
+}
