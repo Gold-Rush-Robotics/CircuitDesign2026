@@ -17,6 +17,7 @@
 #define D1 40
 #define D2 42
 #define D3 44
+#define WATER_SENSOR A0 
 LiquidCrystal lcd(RS, E, D0, D1, D2, D3);
 
 void writeToDisplay(char *text);
@@ -63,15 +64,30 @@ void setup()
 int currentTick = 0;
 
 bool started = false;
+float currentRPM = getRPM();
+unsigned long currentMillis;
+int seconds;
 void loop()
 {    
-    unsigned long currentMillis = millis();
-    int seconds = currentMillis / 1000;
+    currentMillis = millis();
+    seconds = currentMillis / 1000;
     
     // Countdown logic
     if (seconds <= 3) {
         lcd.setCursor(0, 1);
         lcd.print(3 - seconds);
+        digitalWrite(MOTOR_PWR, LOW);
+        switch(seconds){
+            case 3:
+                digitalWrite(RED_PIN, HIGH);
+            break;
+            case 2:
+                digitalWrite(YELLOW_PIN, HIGH);
+            break;
+            case 1:
+                digitalWrite(GREEN_PIN, HIGH);
+            break;
+        }
     } else {
         started = true;
         digitalWrite(MOTOR_PWR, HIGH);
@@ -80,15 +96,23 @@ void loop()
     // Only calculate RPM every 500ms
     if (started && (currentMillis - prevMillis >= interval)) {
 
-        float currentRPM = getRPM();
+        currentRPM = getRPM();
         prevMillis = currentMillis; // Update the timer
-
-        if (currentRPM > 90) {
-            digitalWrite(GREEN_PIN, HIGH);
+        if(seconds < 5){
+            digitalWrite(YELLOW_PIN, HIGH);
             digitalWrite(RED_PIN, LOW);
-        } else {
             digitalWrite(GREEN_PIN, LOW);
-            digitalWrite(RED_PIN, HIGH);
+        } else {
+            digitalWrite(YELLOW_PIN, LOW);
+            if (currentRPM > 90) {
+                digitalWrite(GREEN_PIN, HIGH);
+                digitalWrite(YELLOW_PIN, LOW);
+                digitalWrite(RED_PIN, LOW);
+            } else {
+                digitalWrite(GREEN_PIN, LOW);
+                digitalWrite(YELLOW_PIN, LOW);
+                digitalWrite(RED_PIN, HIGH);
+            }
         }
         lcd.clear();
         lcd.setCursor(0, 0);
@@ -97,15 +121,3 @@ void loop()
     }
 }
 
-//     delay(1000);
-//     digitalWrite(YELLOW_PIN, HIGH);
-//     delay(1000);
-//     digitalWrite(GREEN_PIN, HIGH);
-//     delay(1000);
-//     digitalWrite(MOTOR_PWR, HIGH);
-//     digitalWrite(RED_PIN, LOW);
-//     digitalWrite(YELLOW_PIN, LOW);
-
-//     delay(3000);
-
-// }
