@@ -9,7 +9,7 @@
 #define YELLOW_PIN 34
 #define RED_PIN 36
 #define MOTOR_PWR 2 
-#define MOTOR_ENC 22
+#define MOTOR_ENC 21
 //display 
 #define RS 7 //Can data be written
 #define E 6  //Enable
@@ -21,7 +21,7 @@ LiquidCrystal lcd(RS, E, D0, D1, D2, D3);
 
 
 void writeToDisplay(char* text);
-void countRPM();
+void RPMInterrupt();
 volatile int RPM = 0;
 volatile int RPMCount = 0;
 unsigned long lastTime = 0;
@@ -35,7 +35,7 @@ void setup()
   pinMode(RED_PIN, OUTPUT);
   pinMode(MOTOR_PWR, OUTPUT);
   pinMode(MOTOR_ENC, INPUT_PULLUP);
-  attachInterrupt(MOTOR_ENC, countRPM, FALLING);
+  attachInterrupt(digitalPinToInterrupt(MOTOR_ENC), RPMInterrupt, FALLING);
   lcd.begin(16,2);
     
 }
@@ -62,11 +62,14 @@ void loop()
 
 }
 
-void countRPM(){
-    unsigned long now = millis();
+void RPMInterrupt(){
     RPMCount++;
-    
-
+    /*unsigned long now = millis();
+    int delta = now - lastTime;
+    lastTime = now;
+    RPM = ((RPMCount-lastRPMCount)/delta)*60000;
+    lastRPMCount = RPMCount;
+    RPMCount = 0;*/
 }
 void writeToDisplay(char* text){
     
