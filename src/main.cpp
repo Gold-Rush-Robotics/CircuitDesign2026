@@ -5,6 +5,8 @@
 #include <Arduino.h>
 #include <PID_v1.h>
 #include <LiquidCrystal.h>
+#include <Wire.h>
+#include <Adafruit_INA219.h>
 #define GREEN_PIN 32
 #define YELLOW_PIN 34
 #define RED_PIN 36
@@ -19,6 +21,7 @@
 #define D3 44
 #define WATER_SENSOR A0
 LiquidCrystal lcd(RS, E, D0, D1, D2, D3);
+Adafruit_INA219 ina219;
 
 void writeToDisplay(char *text);
 
@@ -59,6 +62,8 @@ void setup()
     pinMode(MOTOR_PWR, OUTPUT);
     pinMode(MOTOR_ENC, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(MOTOR_ENC), RPMInterrupt, FALLING);
+    uint32_t currentFrequency;
+    ina219.begin();
     lcd.begin(16, 2);
 }
 
@@ -72,7 +77,25 @@ unsigned long currentMillis;
 int seconds;
 unsigned long rampStartTime = 0;
 void loop()
-{
+{    
+    
+    if(analogRead(A0) < 90){
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("No Water");
+        digitalWrite(GREEN_PIN, LOW);
+        digitalWrite(RED_PIN, HIGH);
+        digitalWrite(YELLOW_PIN, LOW);
+        digitalWrite(MOTOR_PWR, LOW);
+        currentTick = 0;
+        started = false;
+        currentRPM = getRPM();
+        currentMillis = 0;
+        pulseCount = 0;
+        prevMillis = 0;
+        seconds = 0;
+        delay(50);
+    } else {
     currentMillis = millis();
     seconds = currentMillis / 1000;
 
@@ -139,10 +162,37 @@ void loop()
             else
             {
                 digitalWrite(MOTOR_PWR, HIGH);
-                digitalWrite(GREEN_PIN, LOW);
-                digitalWrite(YELLOW_PIN, LOW);
-                digitalWrite(RED_PIN, HIGH);
             }
+        }
+        
+        // Only calculate RPM every 500ms
+        if (started && (currentMillis - prevMillis >= interval)) {
+
+            currentRPM = getRPM();
+            prevMillis = currentMillis; // Update the timer
+            if(seconds < 5){
+                digitalWrite(YELLOW_PIN, HIGH);
+                digitalWrite(RED_PIN, LOW);
+                digitalWrite(GREEN_PIN, LOW);
+            } else {
+                digitalWrite(YELLOW_PIN, LOW);
+                if (currentRPM > 90) {
+                    digitalWrite(GREEN_PIN, HIGH);
+                    digitalWrite(YELLOW_PIN, LOW);
+                    digitalWrite(RED_PIN, LOW);
+                } else {
+                    digitalWrite(GREEN_PIN, LOW);
+                    digitalWrite(YELLOW_PIN, LOW);
+                    digitalWrite(RED_PIN, HIGH);
+                }
+            }
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("RPM: ");
+            lcd.print((int)currentRPM);
+            lcd.setCursor(0, 1);
+            lcd.print("Current: ");
+            lcd.print((float)ina219.getCurrent_mA());
         }
     }
 
@@ -161,12 +211,5 @@ void loop()
             lcd.clear();
             lcd.print((int)currentRPM);
         }
-    }
-
-    if (started && (currentMillis - prevMillis >= RPM_UPDATE_INTERVAL))
-    {
-
-        prevMillis = currentMillis;
-        currentRPM = getRPM();
     }
 }
